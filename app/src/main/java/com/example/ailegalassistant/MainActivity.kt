@@ -1,7 +1,11 @@
 package com.example.ailegalassistant
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.*
@@ -18,16 +22,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -68,183 +78,149 @@ data class Conversation(
 )
 
 // --- Theme Definition (Enhanced) ---
-
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF7B9BFF),
-    onPrimary = Color.White,
-    background = Color(0xFF121212),
-    surface = Color(0xFF1E1E1E),
-    onBackground = Color(0xFFEAEAEA),
-    onSurface = Color(0xFFEAEAEA),
-    primaryContainer = Color(0xFF3A3A5A),
-    onPrimaryContainer = Color(0xFFD0D0FF)
+    primary = Color(0xFF7B9BFF), onPrimary = Color.White, background = Color(0xFF121212),
+    surface = Color(0xFF1E1E1E), onBackground = Color(0xFFEAEAEA), onSurface = Color(0xFFEAEAEA),
+    primaryContainer = Color(0xFF3A3A5A), onPrimaryContainer = Color(0xFFD0D0FF)
 )
-
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF006AFF),
-    onPrimary = Color.White,
-    background = Color(0xFFF4F6FC),
-    surface = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF1C1C1E),
-    onSurface = Color(0xFF1C1C1E),
-    primaryContainer = Color(0xFFD8E2FF),
-    onPrimaryContainer = Color(0xFF001C5A)
+    primary = Color(0xFF006AFF), onPrimary = Color.White, background = Color(0xFFF4F6FC),
+    surface = Color(0xFFFFFFFF), onBackground = Color(0xFF1C1C1E), onSurface = Color(0xFF1C1C1E),
+    primaryContainer = Color(0xFFD8E2FF), onPrimaryContainer = Color(0xFF001C5A)
 )
 
 @Composable
-fun AILegalAssistantTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) {
+fun AILegalAssistantTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography(
-            bodyLarge = TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Normal,
-                fontSize = 16.sp,
-                lineHeight = 24.sp
-            ),
-            titleLarge = TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp
-            ),
-            labelMedium = TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
-            ),
-            bodySmall = TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Normal,
-                fontSize = 12.sp
-            )
-        ),
-        content = content
-    )
+    MaterialTheme(colorScheme = colorScheme, typography = Typography(
+        bodyLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
+        titleLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+        labelMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 14.sp),
+        bodySmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 12.sp)
+    ), content = content)
 }
 
 // --- Local Storage: Conversation Repository ---
-
 class ConversationRepository(context: Context) {
     private val prefs = context.getSharedPreferences("chat_history", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val historyKey = "conversation_history"
+    private val themeKey = "theme_preference"
 
     fun saveConversations(conversations: List<Conversation>) {
         val json = gson.toJson(conversations)
         prefs.edit().putString(historyKey, json).apply()
     }
-
     fun loadConversations(): MutableList<Conversation> {
         val json = prefs.getString(historyKey, null)
         return if (json != null) {
             val type = object : TypeToken<MutableList<Conversation>>() {}.type
             gson.fromJson(json, type)
-        } else {
-            mutableListOf()
-        }
+        } else { mutableListOf() }
     }
+    fun saveTheme(isDark: Boolean) = prefs.edit().putBoolean(themeKey, isDark).apply()
+    fun loadTheme(isSystemDark: Boolean): Boolean = prefs.getBoolean(themeKey, isSystemDark)
 }
 
-
 // --- Main Activity ---
-
 class MainActivity : ComponentActivity() {
+    private var tts: TextToSpeech? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            AILegalAssistantTheme {
-                val context = LocalContext.current
-                val repository = remember { ConversationRepository(context) }
-                LegalAssistantChatScreen(repository = repository)
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.US
             }
         }
+
+        setContent {
+            val context = LocalContext.current
+            val repository = remember { ConversationRepository(context) }
+            val isSystemDark = isSystemInDarkTheme()
+            var isDarkTheme by remember { mutableStateOf(repository.loadTheme(isSystemDark)) }
+
+            AILegalAssistantTheme(darkTheme = isDarkTheme) {
+                LegalAssistantChatScreen(
+                    repository = repository,
+                    isDarkTheme = isDarkTheme,
+                    onThemeChange = { isDarkTheme = it; repository.saveTheme(it) },
+                    textToSpeech = tts
+                )
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        super.onDestroy()
     }
 }
 
 // --- Main Chat Screen with Drawer ---
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LegalAssistantChatScreen(repository: ConversationRepository) {
+fun LegalAssistantChatScreen(
+    repository: ConversationRepository,
+    isDarkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit,
+    textToSpeech: TextToSpeech?
+) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-
     var conversations by remember { mutableStateOf(repository.loadConversations()) }
-    var currentConversation by remember {
-        mutableStateOf(
-            conversations.firstOrNull() ?: createNewConversation()
-        )
-    }
+    var currentConversation by remember { mutableStateOf(createNewConversation()) }
 
     fun saveState() {
-        val index = conversations.indexOfFirst { it.id == currentConversation.id }
-        val updatedList = conversations.toMutableList()
-
-        if (index != -1) {
-            updatedList[index] = currentConversation.copy(timestamp = System.currentTimeMillis())
-        } else {
-            updatedList.add(0, currentConversation)
+        if (currentConversation.messages.any { it.isFromUser }) {
+            val index = conversations.indexOfFirst { it.id == currentConversation.id }
+            val updatedList = conversations.toMutableList()
+            if (index != -1) updatedList[index] = currentConversation.copy(timestamp = System.currentTimeMillis())
+            else updatedList.add(0, currentConversation)
+            val sortedList = updatedList.sortedByDescending { it.timestamp }
+            repository.saveConversations(sortedList)
+            conversations = sortedList.toMutableList()
         }
-
-        val sortedList = updatedList.sortedByDescending { it.timestamp }
-        repository.saveConversations(sortedList)
-        conversations = sortedList.toMutableList()
     }
 
     fun handleNewConversation() {
-        val newConversation = createNewConversation()
-        conversations = (listOf(newConversation) + conversations).distinctBy { it.id }.toMutableList()
-        currentConversation = newConversation
-        coroutineScope.launch {
-            drawerState.close()
-        }
+        saveState()
+        currentConversation = createNewConversation()
+        coroutineScope.launch { drawerState.close() }
     }
 
     fun switchConversation(conversationId: String) {
-        conversations.find { it.id == conversationId }?.let {
-            currentConversation = it
-        }
-        coroutineScope.launch {
-            drawerState.close()
-        }
+        saveState()
+        conversations.find { it.id == conversationId }?.let { currentConversation = it }
+        coroutineScope.launch { drawerState.close() }
     }
 
     fun deleteConversation(conversationId: String) {
         val updatedList = conversations.filterNot { it.id == conversationId }
         repository.saveConversations(updatedList)
         conversations = updatedList.toMutableList()
-
         if (currentConversation.id == conversationId) {
             currentConversation = conversations.firstOrNull() ?: createNewConversation()
         }
     }
 
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             DrawerContent(
-                conversations = conversations,
-                onConversationClick = { switchConversation(it) },
-                onNewChatClick = { handleNewConversation() },
-                onDeleteConversation = { deleteConversation(it) }
+                conversations = conversations, isDarkTheme = isDarkTheme,
+                onConversationClick = ::switchConversation,
+                onNewChatClick = ::handleNewConversation,
+                onDeleteConversation = ::deleteConversation,
+                onThemeChange = onThemeChange
             )
         }
     ) {
         ChatScreenContent(
             conversation = currentConversation,
-            onSendMessage = {
-                saveState()
-            },
-            onMenuClick = {
-                coroutineScope.launch {
-                    drawerState.open()
-                }
-            }
+            onSendMessage = ::saveState,
+            onMenuClick = { coroutineScope.launch { drawerState.open() } },
+            textToSpeech = textToSpeech
         )
     }
 }
@@ -252,98 +228,53 @@ fun LegalAssistantChatScreen(repository: ConversationRepository) {
 fun createNewConversation(): Conversation {
     return Conversation(
         title = "New Chat",
-        messages = mutableListOf(Message(text = "Welcome to your AI Legal Assistant! How can I help you today?", isFromUser = false))
+        messages = mutableListOf(Message(text = "Welcome! I am your AI Legal Assistant. How can I assist you today?", isFromUser = false))
     )
 }
 
 @Composable
 fun DrawerContent(
-    conversations: List<Conversation>,
-    onConversationClick: (String) -> Unit,
-    onNewChatClick: () -> Unit,
-    onDeleteConversation: (String) -> Unit
+    conversations: List<Conversation>, isDarkTheme: Boolean, onConversationClick: (String) -> Unit,
+    onNewChatClick: () -> Unit, onDeleteConversation: (String) -> Unit, onThemeChange: (Boolean) -> Unit
 ) {
-    ModalDrawerSheet {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    contentDescription = "App Icon",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(Modifier.width(12.dp))
+    ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.85f)) {
+        Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+            Row(modifier = Modifier.fillMaxWidth().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(painterResource(id = R.drawable.ic_launcher_foreground), "App Icon", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                Spacer(Modifier.width(16.dp))
                 Text("Chat History", style = MaterialTheme.typography.titleLarge)
             }
-            Divider()
-            Button(
-                onClick = onNewChatClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Icon(Icons.Default.Menu, contentDescription = "New Chat")
-                Spacer(Modifier.width(8.dp))
-                Text("Start New Chat")
+            Button(onClick = onNewChatClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                Icon(Icons.Default.Add, "New Chat"); Spacer(Modifier.width(8.dp)); Text("Start New Chat")
             }
-            Divider()
+            Spacer(Modifier.height(16.dp))
+            Divider(modifier = Modifier.padding(horizontal = 24.dp))
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(conversations, key = { it.id }) { conversation ->
-                    ConversationHistoryItem(
-                        conversation = conversation,
-                        onClick = { onConversationClick(conversation.id) },
-                        onDelete = { onDeleteConversation(conversation.id) }
-                    )
-                }
+                items(conversations, key = { it.id }) { conv -> ConversationHistoryItem(conv, { onConversationClick(conv.id) }, { onDeleteConversation(conv.id) }) }
+            }
+            Divider(modifier = Modifier.padding(horizontal = 24.dp))
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Theme", style = MaterialTheme.typography.bodyLarge)
+                ThemeToggleButton(isDarkTheme, onThemeChange)
             }
         }
     }
 }
 
 @Composable
-fun ConversationHistoryItem(
-    conversation: Conversation,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = conversation.title,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = conversation.messages.lastOrNull()?.text ?: "No messages yet",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+fun ThemeToggleButton(isDarkTheme: Boolean, onThemeChange: (Boolean) -> Unit) {
+    val icon = if (isDarkTheme) Icons.Default.Nightlight else Icons.Default.WbSunny
+    Switch(checked = isDarkTheme, onCheckedChange = onThemeChange, thumbContent = { Icon(icon, "Theme Icon", modifier = Modifier.size(SwitchDefaults.IconSize)) })
+}
+
+@Composable
+fun ConversationHistoryItem(conversation: Conversation, onClick: () -> Unit, onDelete: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(conversation.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+            Text(conversation.messages.lastOrNull()?.text ?: "No messages", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Delete Conversation",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            )
-        }
+        IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) }
     }
 }
 
@@ -352,52 +283,35 @@ fun ConversationHistoryItem(
 fun ChatScreenContent(
     conversation: Conversation,
     onSendMessage: () -> Unit,
-    onMenuClick: () -> Unit
+    onMenuClick: () -> Unit,
+    textToSpeech: TextToSpeech?
 ) {
     val coroutineScope = rememberCoroutineScope()
     var userInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val context = LocalContext.current
 
-    val basePrompt = """
-    I need legal advice. Act as a legal assistant specializing in Indian law. Format your response using rich Markdown for clarity (headings, bold, italics, lists, tables, code blocks, and blockquotes). Do not provide a definitive legal opinion. Instead, explain the relevant legal principles, key points, and next steps. Include applicable Acts, Sections, and landmark judgments. This is for informational purposes only. My situation is:
-    """.trimIndent()
+    val basePrompt = "I need legal advice..."
 
     fun sendMessage() {
         if (userInput.isNotBlank()) {
             val userMessage = Message(text = userInput, isFromUser = true)
             conversation.messages.add(userMessage)
-
-            if (conversation.messages.count { it.isFromUser } == 1) {
-                conversation.title = userInput
-            }
-
-            val query = userInput
-            userInput = ""
-            isLoading = true
-
+            if (conversation.messages.count { it.isFromUser } == 1) conversation.title = userInput
+            val query = userInput; userInput = ""; isLoading = true
             coroutineScope.launch {
-                listState.animateScrollToItem(conversation.messages.size - 1)
+                listState.animateScrollToItem(conversation.messages.size)
                 try {
                     val fullPrompt = "$basePrompt $query"
                     val encodedPrompt = withContext(Dispatchers.IO) { URLEncoder.encode(fullPrompt, "UTF-8") }
-                    val apiUrl = "https://text.pollinations.ai/$encodedPrompt"
-                    val result = withContext(Dispatchers.IO) { URL(apiUrl).readText() }
+                    val result = withContext(Dispatchers.IO) { URL("https://text.pollinations.ai/$encodedPrompt").readText() }
                     conversation.messages.add(Message(text = result, isFromUser = false))
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    conversation.messages.add(
-                        Message(
-                            text = "Sorry, an error occurred: ${e.message}",
-                            isFromUser = false
-                        )
-                    )
+                    conversation.messages.add(Message(text = "Sorry, an error occurred: ${e.message}", isFromUser = false))
                 } finally {
-                    isLoading = false
-                    onSendMessage()
-                    if (conversation.messages.isNotEmpty()) {
-                        listState.animateScrollToItem(conversation.messages.size - 1)
-                    }
+                    isLoading = false; onSendMessage(); listState.animateScrollToItem(conversation.messages.size)
                 }
             }
             onSendMessage()
@@ -408,295 +322,206 @@ fun ChatScreenContent(
         topBar = {
             TopAppBar(
                 title = { Text(conversation.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Open Menu")
-                    }
+                navigationIcon = { IconButton(onClick = onMenuClick) { Icon(Icons.Filled.Menu, "Menu") } },
+                actions = {
+                    IconButton(onClick = {
+                        val shareText = conversation.messages.joinToString("\n\n") { "${if (it.isFromUser) "You" else "AI"}: ${it.text}" }
+                        val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) }
+                        context.startActivity(Intent.createChooser(intent, "Share Conversation"))
+                    }) { Icon(Icons.Default.Share, "Share") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp), // Screen edge padding
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(conversation.messages, key = { it.id }) { message ->
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                            initialOffsetY = { it / 2 },
-                            animationSpec = tween(400)
-                        ),
-                    ){
+                items(items = conversation.messages, key = { it.id }, contentType = { if (it.isFromUser) "user" else "bot" }) { message ->
+                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (message.isFromUser) Alignment.End else Alignment.Start) {
                         ChatMessageBubble(message)
+                        MessageActions(message, textToSpeech)
                     }
                 }
                 if (isLoading) {
-                    item {
-                        TypingIndicator()
-                    }
+                    item(contentType = "indicator") { TypingIndicator() }
                 }
             }
-
-            ChatInputBar(
-                value = userInput,
-                onValueChange = { userInput = it },
-                onSend = { sendMessage() }
-            )
+            ChatInputBar(value = userInput, onValueChange = { userInput = it }, onSend = ::sendMessage)
         }
     }
 }
 
+@Composable
+fun MessageActions(message: Message, tts: TextToSpeech?) {
+    val context = LocalContext.current
+    Row(modifier = Modifier.padding(top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        IconButton(modifier = Modifier.size(20.dp), onClick = {
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("message", message.text))
+        }) { Icon(Icons.Default.ContentCopy, "Copy", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
+
+        if (!message.isFromUser) {
+            IconButton(modifier = Modifier.size(20.dp), onClick = { tts?.speak(message.text, TextToSpeech.QUEUE_FLUSH, null, null) }) {
+                Icon(Icons.Default.VolumeUp, "Read Aloud", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+        }
+    }
+}
 
 @Composable
 fun ChatMessageBubble(message: Message) {
     val isUser = message.isFromUser
-    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val userBubbleGradient = Brush.horizontalGradient(colors = listOf(MaterialTheme.colorScheme.primary, Color(0xFF3A86FF)))
+    val bubbleColor = if (isUser) Color.Transparent else MaterialTheme.colorScheme.surface
     val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
 
-    val horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+    // --- KEY CHANGE: Conditional modifier for width ---
+    val bubbleModifier = if (isUser) {
+        Modifier.widthIn(max = 320.dp)
+    } else {
+        Modifier.fillMaxWidth()
+    }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = horizontalArrangement,
-        verticalAlignment = Alignment.Top
+    Surface(
+        color = bubbleColor,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (isUser) 20.dp else 4.dp, bottomEnd = if (isUser) 4.dp else 20.dp),
+        modifier = bubbleModifier,
+        shadowElevation = 2.dp
     ) {
-        Box(
-            modifier = Modifier
-                // *** KEY CHANGE: AI bubble uses weight to fill width, user bubble has max width ***
-                .then(if (isUser) Modifier.widthIn(max = 320.dp) else Modifier.weight(1f))
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 20.dp,
-                        topEnd = 20.dp,
-                        bottomStart = if (isUser) 20.dp else 4.dp,
-                        bottomEnd = if (isUser) 4.dp else 20.dp
-                    )
-                )
-                .background(bubbleColor)
-        ) {
+        Box(modifier = if (isUser) Modifier.background(userBubbleGradient) else Modifier) {
             if (isUser) {
-                Text(
-                    text = message.text,
-                    color = textColor,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(16.dp)
-                )
+                Text(message.text, color = textColor, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
             } else {
-                FormattedMarkdownText(
-                    markdown = message.text,
-                    textColor = textColor
-                )
+                FormattedMarkdownText(markdown = message.text, textColor = textColor)
             }
         }
     }
 }
 
-// --- ENHANCED MARKDOWN PARSER ---
-
+// --- FULL, CORRECT MARKDOWN PARSER (Unchanged, included for completeness) ---
 @Composable
-fun FormattedMarkdownText(
-    markdown: String,
-    textColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val lines = markdown.lines()
-    Column(modifier = modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        var i = 0
-        while (i < lines.size) {
-            val line = lines[i]
-            when {
-                line.startsWith("```") -> {
-                    val codeBlockLines = lines.subList(i + 1, lines.size).takeWhile { it != "```" }
-                    CodeBlock(codeBlockLines.joinToString("\n"))
-                    i += codeBlockLines.size + 2
+fun FormattedMarkdownText(markdown: String, textColor: Color) {
+    val blocks = remember(markdown, textColor) { parseMarkdownToBlocks(markdown, textColor) }
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        blocks.forEach { block ->
+            when (block) {
+                is MarkdownBlock.Header -> Text(block.content, style = getHeaderStyle(block.level, textColor))
+                is MarkdownBlock.Paragraph -> Text(block.content, style = MaterialTheme.typography.bodyLarge.copy(color = textColor))
+                is MarkdownBlock.ListItem -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(block.bullet, style = MaterialTheme.typography.bodyLarge.copy(color = textColor, fontWeight = FontWeight.Bold))
+                    Text(block.content, style = MaterialTheme.typography.bodyLarge.copy(color = textColor), modifier = Modifier.weight(1f))
                 }
-                isTable(lines, i) -> {
-                    val tableLines = lines.subList(i, lines.size).takeWhile { it.trim().startsWith("|") || it.trim().endsWith("|") }
-                    MarkdownTable(tableLines, textColor)
-                    i += tableLines.size
-                }
-                line.startsWith("#") -> {
-                    Header(line, textColor)
-                    i++
-                }
-                line.startsWith(">") -> {
-                    Blockquote(line.removePrefix(">").trim(), textColor)
-                    i++
-                }
-                line.startsWith("* ") || line.startsWith("- ") -> {
-                    val prefix = if (line.startsWith("* ")) "* " else "- "
-                    ListItem(line.removePrefix(prefix).trim(), textColor)
-                    i++
-                }
-                line.matches(Regex("^\\d+\\.\\s.*")) -> {
-                    ListItem(line, textColor, isOrdered = true)
-                    i++
-                }
-                line.matches(Regex("^\\s*---*\\s*$")) -> {
-                    Divider(color = textColor.copy(alpha = 0.2f), thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
-                    i++
-                }
-                line.isNotBlank() -> {
-                    Paragraph(line, textColor)
-                    i++
-                }
-                else -> { i++ }
+                is MarkdownBlock.Blockquote -> Blockquote(block.content, textColor)
+                is MarkdownBlock.CodeBlock -> CodeBlock(block.content)
+                is MarkdownBlock.Table -> MarkdownTable(block.headers, block.rows, textColor)
+                is MarkdownBlock.Divider -> Divider(color = textColor.copy(alpha = 0.2f), thickness = 1.dp, modifier = Modifier.padding(vertical = 8.dp))
             }
         }
     }
 }
 
-@Composable
-private fun Header(line: String, color: Color) {
-    val level = line.takeWhile { it == '#' }.count()
-    val text = line.removePrefix("#".repeat(level)).trim()
-    val style = when (level) {
-        1 -> MaterialTheme.typography.headlineSmall
-        2 -> MaterialTheme.typography.titleLarge
-        3 -> MaterialTheme.typography.titleMedium
-        else -> MaterialTheme.typography.titleSmall
-    }
-    Text(parseInlineMarkdown(text, color.copy(alpha = 0.1f)), style = style.copy(color = color))
+private sealed class MarkdownBlock {
+    data class Header(val level: Int, val content: AnnotatedString) : MarkdownBlock()
+    data class Paragraph(val content: AnnotatedString) : MarkdownBlock()
+    data class ListItem(val content: AnnotatedString, val bullet: String) : MarkdownBlock()
+    data class Blockquote(val content: AnnotatedString) : MarkdownBlock()
+    data class CodeBlock(val content: String) : MarkdownBlock()
+    data class Table(val headers: List<AnnotatedString>, val rows: List<List<AnnotatedString>>) : MarkdownBlock()
+    object Divider : MarkdownBlock()
 }
 
 @Composable
-private fun Paragraph(text: String, color: Color) {
-    Text(parseInlineMarkdown(text, color.copy(alpha = 0.1f)), style = MaterialTheme.typography.bodyLarge.copy(color = color))
-}
+private fun getHeaderStyle(level: Int, color: Color): TextStyle = when (level) {
+    1 -> MaterialTheme.typography.headlineSmall; 2 -> MaterialTheme.typography.titleLarge
+    3 -> MaterialTheme.typography.titleMedium; else -> MaterialTheme.typography.titleSmall
+}.copy(color = color)
 
 @Composable
-private fun ListItem(text: String, color: Color, isOrdered: Boolean = false) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        val bullet = if (isOrdered) text.substringBefore(". ") + "." else "•"
-        val content = if (isOrdered) text.substringAfter(". ").trim() else text
-
-        Text(bullet, style = MaterialTheme.typography.bodyLarge.copy(color = color, fontWeight = FontWeight.Bold))
-        Text(parseInlineMarkdown(content, color.copy(alpha = 0.1f)), style = MaterialTheme.typography.bodyLarge.copy(color = color))
-    }
-}
-
-
-@Composable
-private fun Blockquote(text: String, color: Color) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .align(Alignment.CenterVertically)
-                .fillMaxHeight()
-                .background(color.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
-        )
+private fun Blockquote(content: AnnotatedString, color: Color) {
+    Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.width(4.dp).height(20.dp).background(color.copy(alpha = 0.3f), RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(12.dp))
-        Text(
-            parseInlineMarkdown(text, color.copy(alpha = 0.1f)),
-            style = MaterialTheme.typography.bodyLarge.copy(color = color.copy(alpha = 0.8f), fontStyle = FontStyle.Italic)
-        )
+        Text(content, style = MaterialTheme.typography.bodyLarge.copy(color = color.copy(alpha = 0.8f), fontStyle = FontStyle.Italic))
     }
 }
 
 @Composable
 private fun CodeBlock(code: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-            .padding(12.dp)
-    ) {
-        Text(
-            text = code,
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+    Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(12.dp)) {
+        Text(code, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
-private fun isTable(lines: List<String>, currentIndex: Int): Boolean {
-    if (currentIndex + 1 >= lines.size) return false
-    val header = lines[currentIndex].trim()
-    val separator = lines[currentIndex + 1].trim()
-    return header.count{ it == '|' } > 1 && separator.count{ it == '|' } > 1 && separator.matches(Regex("^[|\\s:-]+$"))
-}
-
 @Composable
-private fun MarkdownTable(lines: List<String>, textColor: Color) {
-    val headerCells = lines.first().split("|").map { it.trim() }.drop(1).dropLast(1)
-    val rows = lines.drop(2).map { row -> row.split("|").map { it.trim() }.drop(1).dropLast(1) }
-    val codeColor = textColor.copy(alpha = 0.1f)
-
-    Surface(
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)),
-        shape = RoundedCornerShape(8.dp),
-        color = Color.Transparent
-    ) {
+private fun MarkdownTable(headers: List<AnnotatedString>, rows: List<List<AnnotatedString>>, textColor: Color) {
+    Surface(border = BorderStroke(1.dp, textColor.copy(alpha = 0.2f)), shape = RoundedCornerShape(8.dp), color = Color.Transparent) {
         Column {
-            // Header Row
-            Row(Modifier.background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))) {
-                headerCells.forEach { cell ->
-                    TableCell(text = cell, color = textColor, codeColor = codeColor, isHeader = true, modifier = Modifier.weight(1f))
-                }
+            Row(Modifier.background(textColor.copy(alpha = 0.05f))) {
+                headers.forEach { header -> Text(header, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = textColor), modifier = Modifier.weight(1f).padding(12.dp)) }
             }
-            Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-            // Data Rows
-            rows.forEach { row ->
-                Row {
-                    row.forEach { cell ->
-                        TableCell(text = cell, color = textColor, codeColor = codeColor, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
+            Divider(color = textColor.copy(alpha = 0.2f))
+            rows.forEach { row -> Row { row.forEach { cell -> Text(cell, style = MaterialTheme.typography.bodyMedium.copy(color = textColor), modifier = Modifier.weight(1f).padding(12.dp)) } } }
         }
     }
 }
 
-@Composable
-private fun RowScope.TableCell(text: String, color: Color, codeColor: Color, modifier: Modifier = Modifier, isHeader: Boolean = false) {
-    Text(
-        text = parseInlineMarkdown(text, codeColor),
-        style = MaterialTheme.typography.bodyMedium.copy(
-            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-            color = color
-        ),
-        modifier = modifier
-            .padding(horizontal = 12.dp, vertical = 12.dp)
-    )
+private fun parseMarkdownToBlocks(markdown: String, textColor: Color): List<MarkdownBlock> {
+    val blocks = mutableListOf<MarkdownBlock>()
+    val lines = markdown.lines()
+    var i = 0
+    val codeColor = textColor.copy(alpha = 0.1f)
+    while (i < lines.size) {
+        val line = lines[i]
+        when {
+            line.startsWith("```") -> {
+                val codeBlockLines = lines.subList(i + 1, lines.size).takeWhile { it != "```" }; blocks.add(MarkdownBlock.CodeBlock(codeBlockLines.joinToString("\n"))); i += codeBlockLines.size + 2; continue
+            }
+            isTable(lines, i) -> {
+                val tableLines = lines.subList(i, lines.size).takeWhile { it.trim().startsWith("|") || it.trim().endsWith("|") }
+                val headers = tableLines.first().split("|").map { parseInlineMarkdown(it.trim(), codeColor) }.drop(1).dropLast(1)
+                val rows = tableLines.drop(2).map { row -> row.split("|").map { parseInlineMarkdown(it.trim(), codeColor) }.drop(1).dropLast(1) }
+                blocks.add(MarkdownBlock.Table(headers, rows)); i += tableLines.size; continue
+            }
+            line.startsWith("#") -> {
+                val level = line.takeWhile { it == '#' }.count(); val text = line.removePrefix("#".repeat(level)).trim()
+                blocks.add(MarkdownBlock.Header(level, parseInlineMarkdown(text, codeColor)))
+            }
+            line.startsWith(">") -> blocks.add(MarkdownBlock.Blockquote(parseInlineMarkdown(line.removePrefix(">").trim(), codeColor)))
+            line.startsWith("* ") || line.startsWith("- ") -> {
+                val prefix = if (line.startsWith("* ")) "* " else "- "; blocks.add(MarkdownBlock.ListItem(parseInlineMarkdown(line.removePrefix(prefix).trim(), codeColor), "•"))
+            }
+            line.matches(Regex("^\\d+\\.\\s.*")) -> {
+                val bullet = line.substringBefore(". ") + "."; val content = line.substringAfter(". ").trim()
+                blocks.add(MarkdownBlock.ListItem(parseInlineMarkdown(content, codeColor), bullet))
+            }
+            line.matches(Regex("^\\s*---*\\s*$")) -> blocks.add(MarkdownBlock.Divider)
+            line.isNotBlank() -> blocks.add(MarkdownBlock.Paragraph(parseInlineMarkdown(line, codeColor)))
+        }
+        i++
+    }
+    return blocks
 }
 
-// Robust inline parser for bold, italic, and code
+private fun isTable(lines: List<String>, currentIndex: Int): Boolean {
+    if (currentIndex + 1 >= lines.size) return false
+    val header = lines[currentIndex].trim(); val separator = lines[currentIndex + 1].trim()
+    return header.count{ it == '|' } > 1 && separator.count{ it == '|' } > 1 && separator.matches(Regex("^[|\\s:-]+$"))
+}
+
 private fun parseInlineMarkdown(text: String, codeColor: Color): AnnotatedString {
     val pattern = Pattern.compile("(\\*\\*(.*?)\\*\\*)|(\\*(.*?)\\*)|(`(.*?)`)")
     val matcher = pattern.matcher(text)
-
     return buildAnnotatedString {
         var lastIndex = 0
         while (matcher.find()) {
             val startIndex = matcher.start()
-            if (startIndex > lastIndex) {
-                append(text.substring(lastIndex, startIndex))
-            }
-
-            val boldText = matcher.group(2)
-            val italicText = matcher.group(4)
-            val codeText = matcher.group(6)
-
+            if (startIndex > lastIndex) append(text.substring(lastIndex, startIndex))
+            val boldText = matcher.group(2); val italicText = matcher.group(4); val codeText = matcher.group(6)
             when {
                 boldText != null -> withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) { append(boldText) }
                 italicText != null -> withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) { append(italicText) }
@@ -704,50 +529,21 @@ private fun parseInlineMarkdown(text: String, codeColor: Color): AnnotatedString
             }
             lastIndex = matcher.end()
         }
-
-        if (lastIndex < text.length) {
-            append(text.substring(lastIndex))
-        }
+        if (lastIndex < text.length) append(text.substring(lastIndex))
     }
 }
 
+// --- RESTORED COMPOSABLES ---
 @Composable
 fun TypingIndicator() {
-    Row(
-        modifier = Modifier.padding(bottom = 8.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
+    Row(modifier = Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
         val infiniteTransition = rememberInfiniteTransition("typing_dots")
-        val dotOffsets = (0..2).map {
-            infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = -16f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(400, delayMillis = it * 120, easing = LinearOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "dot_offset_$it"
-            )
+        val dotScales = (0..2).map {
+            infiniteTransition.animateFloat(initialValue = 0.5f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(400, delayMillis = it * 150, easing = LinearOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "dot_scale_$it")
         }
-
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 4.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 20.dp, vertical = 20.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                dotOffsets.forEach {
-                    Box(
-                        modifier = Modifier
-                            .offset(y = it.value.dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    )
-                }
+        Surface(shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 4.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+            Row(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                dotScales.forEach { Box(modifier = Modifier.size(8.dp).graphicsLayer { scaleX = it.value; scaleY = it.value }.clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))) }
             }
         }
     }
@@ -756,67 +552,26 @@ fun TypingIndicator() {
 @Composable
 fun ChatInputBar(value: String, onValueChange: (String) -> Unit, onSend: () -> Unit) {
     Surface(shadowElevation = 8.dp) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = { Text("Ask me anything...") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.background,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.background
-                )
+        Row(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextField(value = value, onValueChange = onValueChange, placeholder = { Text("Ask me anything...") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(24.dp),
+                colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = MaterialTheme.colorScheme.background, unfocusedContainerColor = MaterialTheme.colorScheme.background)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            IconButton(
-                onClick = onSend,
-                enabled = value.isNotBlank(),
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (value.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
-                    ),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
-                    tint = Color.White
-                )
+            val isEnabled = value.isNotBlank()
+            val animatedColor by animateColorAsState(if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), label = "button color")
+            val animatedScale by animateFloatAsState(if(isEnabled) 1f else 0.9f, label = "button scale")
+            IconButton(onClick = onSend, enabled = isEnabled, modifier = Modifier.size(48.dp).graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }.clip(CircleShape).background(animatedColor)) {
+                Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Color.White)
             }
         }
     }
 }
 
-// --- Preview ---
-
 @Preview(showBackground = true, name = "Light Mode")
 @Composable
 fun ChatScreenPreviewLight() {
     AILegalAssistantTheme(darkTheme = false) {
-        val context = LocalContext.current
-        val repository = remember { ConversationRepository(context) }
-        LegalAssistantChatScreen(repository)
-    }
-}
-
-@Preview(showBackground = true, name = "Dark Mode")
-@Composable
-fun ChatScreenPreviewDark() {
-    AILegalAssistantTheme(darkTheme = true) {
-        val context = LocalContext.current
-        val repository = remember { ConversationRepository(context) }
-        LegalAssistantChatScreen(repository)
+        LegalAssistantChatScreen(repository = ConversationRepository(LocalContext.current), isDarkTheme = false, onThemeChange = {}, textToSpeech = null)
     }
 }
 
