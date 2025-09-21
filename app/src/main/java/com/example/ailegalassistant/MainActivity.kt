@@ -200,7 +200,7 @@ fun LegalAssistantChatScreen(
 }
 
 fun createNewConversation(): Conversation {
-    return Conversation(title = "New Chat", messages = mutableListOf(Message(text = "Welcome! I am your AI Legal Assistant. How can I assist you today?", isFromUser = false)))
+    return Conversation(title = "New Chat", messages = mutableListOf(Message(text = "Welcome to Vakeelnow! I am your AI Legal Assistant. How can I assist you today?", isFromUser = false)))
 }
 
 @Composable
@@ -210,19 +210,42 @@ fun DrawerContent(
     onFindLawyerClick: () -> Unit
 ) {
     ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.85f)) {
-        Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-            Row(modifier = Modifier.fillMaxWidth().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(id = R.drawable.ic_launcher_foreground), "App Icon", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
-                Spacer(Modifier.width(16.dp)); Text("AI Legal Assistant", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)) {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text(
+                        "VakeelNow",
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(5.dp));
+                    Text(
+                        "A Legal Assistant to help you with legal matters",
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
-            Button(onClick = onNewChatClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) { Icon(Icons.Default.Add, "New Chat"); Spacer(Modifier.width(8.dp)); Text("Start New Chat") }
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onFindLawyerClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) { Icon(Icons.Default.Search, "Find a Lawyer"); Spacer(Modifier.width(8.dp)); Text("Find a Lawyer") }
+            Button(onClick = onNewChatClick, modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)) { Icon(Icons.Default.Add, "New Chat"); Spacer(Modifier.width(8.dp)); Text("Start New Chat") }
+
+            OutlinedButton(onClick = onFindLawyerClick, modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)) { Icon(Icons.Default.Search, "Find a Lawyer"); Spacer(Modifier.width(8.dp)); Text("Find a Lawyer") }
             Spacer(Modifier.height(16.dp)); Divider(modifier = Modifier.padding(horizontal = 24.dp))
             Text("Recent Chats", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp))
             LazyColumn(modifier = Modifier.weight(1f)) { items(conversations, key = { it.id }) { conv -> ConversationHistoryItem(conv, { onConversationClick(conv.id) }, { onDeleteConversation(conv.id) }) } }
             Divider(modifier = Modifier.padding(horizontal = 24.dp))
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Theme", style = MaterialTheme.typography.bodyLarge); ThemeToggleButton(isDarkTheme, onThemeChange)
             }
         }
@@ -237,7 +260,10 @@ fun ThemeToggleButton(isDarkTheme: Boolean, onThemeChange: (Boolean) -> Unit) {
 
 @Composable
 fun ConversationHistoryItem(conversation: Conversation, onClick: () -> Unit, onDelete: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+        .padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(conversation.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(conversation.messages.lastOrNull()?.text ?: "No messages", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -258,8 +284,6 @@ fun ChatScreenContent(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val basePrompt = "I need legal advice regarding a personal issue. Please act as a knowledgeable legal assistant specializing in Indian law and the Indian Constitution. Do not provide a definitive legal opinion, but rather explain the relevant legal principles, key points to consider, and suggest the typical next steps. Explain the relevant legal context, including applicable Acts, Sections, and landmark court judgments, while also highlighting important considerations and potential challenges. Remember, this is for informational purposes only and is not a substitute for advice from a qualified lawyer. Here is my situation: "
-
-    //val basePrompt = "I need legal advice..."
 
     fun sendMessage() {
         if (userInput.isNotBlank()) {
@@ -310,9 +334,13 @@ fun ChatScreenContent(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)) {
             LazyColumn(
-                state = listState, modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                state = listState, modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
                 contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(items = conversation.messages, key = { it.id }, contentType = { if (it.isFromUser) "user" else "bot" }) { message ->
@@ -383,7 +411,9 @@ fun FindLawyerDialog(onDismiss: () -> Unit) {
                 OutlinedTextField(value = city, onValueChange = { city = it }, label = { Text("Enter City") }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(16.dp))
                 ExposedDropdownMenuBox(expanded = isDropdownExpanded, onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }) {
-                    OutlinedTextField(value = areaOfLaw, onValueChange = {}, readOnly = true, label = { Text("Area of Law") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
+                    OutlinedTextField(value = areaOfLaw, onValueChange = {}, readOnly = true, label = { Text("Area of Law") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) }, modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor())
                     ExposedDropdownMenu(expanded = isDropdownExpanded, onDismissRequest = { isDropdownExpanded = false }) {
                         lawAreas.forEach { area -> DropdownMenuItem(text = { Text(area) }, onClick = { areaOfLaw = area; isDropdownExpanded = false }) }
                     }
@@ -410,7 +440,11 @@ fun TypingIndicator() {
         }
         Surface(shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 4.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
             Row(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                dotScales.forEach { Box(modifier = Modifier.size(8.dp).graphicsLayer { scaleX = it.value; scaleY = it.value }.clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))) }
+                dotScales.forEach { Box(modifier = Modifier
+                    .size(8.dp)
+                    .graphicsLayer { scaleX = it.value; scaleY = it.value }
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))) }
             }
         }
     }
@@ -419,7 +453,10 @@ fun TypingIndicator() {
 @Composable
 fun ChatInputBar(value: String, onValueChange: (String) -> Unit, onSend: () -> Unit) {
     Surface(shadowElevation = 8.dp) {
-        Row(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextField(value = value, onValueChange = onValueChange, placeholder = { Text("Ask me anything...") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(24.dp),
                 colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, focusedContainerColor = MaterialTheme.colorScheme.background, unfocusedContainerColor = MaterialTheme.colorScheme.background)
             )
@@ -427,7 +464,11 @@ fun ChatInputBar(value: String, onValueChange: (String) -> Unit, onSend: () -> U
             val isEnabled = value.isNotBlank()
             val animatedColor by animateColorAsState(if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), label = "button color")
             val animatedScale by animateFloatAsState(if(isEnabled) 1f else 0.9f, label = "button scale")
-            IconButton(onClick = onSend, enabled = isEnabled, modifier = Modifier.size(48.dp).graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }.clip(CircleShape).background(animatedColor)) {
+            IconButton(onClick = onSend, enabled = isEnabled, modifier = Modifier
+                .size(48.dp)
+                .graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }
+                .clip(CircleShape)
+                .background(animatedColor)) {
                 Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Color.White)
             }
         }
