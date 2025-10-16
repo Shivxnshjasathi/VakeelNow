@@ -30,23 +30,21 @@
   - **AI Backend:** Uses the `pollinations.ai` text generation API to power the chat.
   - **Text-to-Speech:** Android's native `TextToSpeech` engine.
 
-## 🌐 Localization Table
+## 🌐 Localization
 
 The app is fully localized to support the following languages:
 
-| Language  | Native Name |
-| :-------- | :---------- |
-| English   | English     |
-| Hindi     | हिन्दी      |
-| Bengali   | বাংলা       |
-| Gujarati  | ગુજરાતી    |
-| Punjabi   | ਪੰਜਾਬੀ     |
-| Kannada   | ಕನ್ನಡ       |
-| Malayalam | മലയാളം    |
-| Odia      | ଓଡ଼ିଆ       |
-| Urdu      | اردو        |
-| Tamil     | தமிழ்       |
-| Telugu    | తెలుగు      |
+  - English (English)
+  - Hindi (हिन्दी)
+  - Bengali (বাংলা)
+  - Gujarati (ગુજરાતી)
+  - Punjabi (ਪੰਜਾਬੀ)
+  - Kannada (ಕನ್ನಡ)
+  - Malayalam (മലയാളം)
+  - Odia (ଓଡ଼ିଆ)
+  - Urdu (اردو)
+  - Tamil (தமிழ்)
+  - Telugu (తెలుగు)
 
 ## 🚀 Getting Started
 
