@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.ailegalassistant"
+    namespace = "com.zincstate.ailegalassistant"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.ailegalassistant"
+        applicationId = "com.zincstate.ailegalassistant"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

@@ -1,4 +1,4 @@
-package com.example.ailegalassistant
+package com.zincstate.ailegalassistant
 
 import org.junit.Test
 

@@ -1,4 +1,4 @@
-package com.example.ailegalassistant
+package com.zincstate.ailegalassistant
 
 import android.content.ClipData
 import android.content.ClipboardManager

@@ -1,4 +1,4 @@
-package com.example.ailegalassistant
+package com.zincstate.ailegalassistant
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

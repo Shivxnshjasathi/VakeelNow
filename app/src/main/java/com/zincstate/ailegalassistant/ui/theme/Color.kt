@@ -1,4 +1,4 @@
-package com.example.ailegalassistant.ui.theme
+package com.zincstate.ailegalassistant.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

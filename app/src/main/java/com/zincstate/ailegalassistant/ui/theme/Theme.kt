@@ -1,6 +1,5 @@
-package com.example.ailegalassistant.ui.theme
+package com.zincstate.ailegalassistant.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
